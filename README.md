@@ -2,6 +2,18 @@
 
 C# streaming TTS library for the [Silero TTS v5](https://github.com/snakers4/silero-models) Russian speech synthesis model. No Python dependency at runtime — runs entirely in .NET via [TorchSharp](https://github.com/dotnet/TorchSharp).
 
+## Model Variants
+
+| | v5_4_ru | v5_cis_base |
+|---|---|---|
+| **License** | CC BY-NC 4.0 (non-commercial) | **MIT (commercial OK)** |
+| **Russian voices** | 4 (aidar, baya, kseniya, xenia) | **29** (aigul, dmitriy, eduard, etc.) |
+| **Other languages** | — | Tatar, Bashkir, Kazakh, Ukrainian, + more |
+| **Quality** | Better prosody and intonation | Slightly lower, but decent |
+| **Built-in accentor** | Yes | No (this library provides one) |
+
+For commercial use, choose `v5_cis_base`. For best quality in non-commercial projects, choose `v5_4_ru`.
+
 ## Features
 
 - **Pure C#** — no Python, no gRPC, no subprocess. The Silero TorchScript model runs directly via TorchSharp/libtorch.
@@ -11,7 +23,7 @@ C# streaming TTS library for the [Silero TTS v5](https://github.com/snakers4/sil
   - **HomoSolver** — BERT-based homograph disambiguation (1,924 context-dependent words like "дела", "замок", "село")
   - **StressAccentor** — Neural FastText n-gram stress placement for correct Russian prosody
   - **Sentence splitting** — Russian abbreviation-aware chunking for long texts
-- **4 speakers** — aidar (male), baya, kseniya, xenia (female)
+- **33 speakers** — 4 from v5_4_ru + 29 Russian voices from v5_cis_base
 - **48 kHz** output, float32 PCM
 
 ## Quick Start
@@ -20,11 +32,14 @@ C# streaming TTS library for the [Silero TTS v5](https://github.com/snakers4/sil
 using SileroSharp;
 using SileroSharp.NAudio;
 
-// Load model with auto-discovery of accentor assets
+// --- Option A: v5_4_ru (CC BY-NC, higher quality) ---
 await using var tts = SileroLoader.LoadWithAutoDiscovery("silero_v5_jit.pt");
-
-// Single-shot synthesis
 var chunk = await tts.SynthesizeAsync("Привет, мир!", SileroVoice.Xenia);
+
+// --- Option B: v5_cis_base (MIT, commercial OK) ---
+var options = new SileroOptions { Variant = SileroModelVariant.V5CisBase };
+await using var ttsCis = SileroLoader.LoadWithAutoDiscovery("silero_v5_cis_jit.pt", options);
+var chunk2 = await ttsCis.SynthesizeAsync("Привет, мир!", SileroVoice.RuDmitriy);
 
 // Streaming to audio device
 await using var sink = new NAudioWaveOutSink();
@@ -53,40 +68,33 @@ tools/                     Python scripts for model investigation and asset extr
 
 ## Prerequisites
 
-### Model file
+### Model files
 
-The TorchScript model file (`silero_v5_jit.pt`, ~89 MB) is not included in the repo. Generate it with:
-
-```bash
-cd tools
-uv venv .venv --python 3.12
-uv pip install -r requirements.txt
-python build_onnx.py   # Downloads Silero v5 and saves silero_v5_jit.pt
-```
-
-Or extract it manually:
+The TorchScript model files are not included in the repo. Extract them with Python:
 
 ```python
 import torch
+
+# v5_4_ru (CC BY-NC 4.0)
 model, _ = torch.hub.load('snakers4/silero-models', 'silero_tts',
                            language='ru', speaker='v5_4_ru', trust_repo=True)
 pkg = model.packages[0]
 torch._C._jit_set_profiling_mode(False)
 pkg.unpack_q_model()
 torch.jit.save(pkg.models[0], 'silero_v5_jit.pt')
-```
 
-### Homosolver BERT model
-
-For correct homograph resolution, also extract the BERT model (`homosolver_bert.pt`, ~37 MB) into the `accentor/` directory:
-
-```python
+# Homosolver BERT model (for correct homograph stress)
 torch.jit.save(pkg.accentor.homosolver.model, 'accentor/homosolver_bert.pt')
+
+# v5_cis_base (MIT)
+model_cis, _ = torch.hub.load('snakers4/silero-models', 'silero_tts',
+                               language='ru', speaker='v5_cis_base', trust_repo=True)
+pkg_cis = model_cis.packages[0]
+pkg_cis.unpack_q_model()
+torch.jit.save(pkg_cis.models[0], 'silero_v5_cis_jit.pt')
 ```
 
 ### NuGet packages
-
-The core library depends on `TorchSharp`. The sample app also needs a libtorch runtime:
 
 ```xml
 <!-- Core library reference -->
@@ -98,10 +106,8 @@ The core library depends on `TorchSharp`. The sample app also needs a libtorch r
 
 ## File Layout at Runtime
 
-The loader expects this layout next to the model file:
-
 ```
-silero_v5_jit.pt              TorchScript TTS model
+silero_v5_jit.pt              TorchScript TTS model (v5_4_ru or v5_cis_base)
 accentor/
   homosolver_bert.pt          BERT homograph resolver model
   homodict.json               Homograph dictionary (1,924 entries)
@@ -118,19 +124,19 @@ accentor/
 
 ```
 Input text
-  │
-  ├─ HomoSolver ──── BERT model (TorchSharp JIT) resolves homographs
-  │                   "как ваши дела?" → "как ваши дел+а?"
-  │
-  ├─ StressAccentor ─ Neural FastText MLP (pure C# math) adds stress marks
-  │                   "д+обрый д+ень. к+ак в+аши дел+а?"
-  │
-  ├─ SymbolTable ──── Character tokenization with SOS/EOS framing
-  │                   [|, д, +, о, б, р, ы, й, ...]
-  │
-  ├─ SileroModel ──── TorchSharp JIT inference → float32 PCM audio
-  │
-  └─ IAudioSink ───── NAudio WaveOut playback (or custom consumer)
+  |
+  +- HomoSolver ---- BERT model (TorchSharp JIT) resolves homographs
+  |                   "как ваши дела?" -> "как ваши дел+а?"
+  |
+  +- StressAccentor - Neural FastText MLP (pure C# math) adds stress marks
+  |                   "д+обрый д+ень. к+ак в+аши дел+а?"
+  |
+  +- SymbolTable ---- Character tokenization with SOS/EOS framing
+  |                   [|, д, +, о, б, р, ы, й, ...]
+  |
+  +- SileroModel ---- TorchSharp JIT inference -> float32 PCM audio
+  |
+  +- IAudioSink ----- NAudio WaveOut playback (or custom consumer)
 ```
 
 ## Streaming Pipeline
@@ -146,4 +152,8 @@ First audio starts playing after the first sentence is synthesized.
 
 ## License
 
-This library is MIT licensed. The Silero TTS v5 Russian model (`v5_4_ru`) is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (non-commercial use only).
+This library (SileroSharp) is MIT licensed.
+
+The Silero TTS models have separate licenses:
+- **v5_cis_base** — MIT (commercial use OK)
+- **v5_4_ru** — CC BY-NC 4.0 (non-commercial only)
