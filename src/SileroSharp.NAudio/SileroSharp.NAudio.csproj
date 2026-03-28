@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>SileroSharp.NAudio</PackageId>
+    <Description>NAudio WaveOut audio sink for SileroSharp TTS client.</Description>
+    <PackageTags>Silero;TTS;NAudio;AudioPlayback</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SileroSharp\SileroSharp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+</Project>

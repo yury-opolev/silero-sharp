@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SileroSharp\SileroSharp.csproj" />
+    <ProjectReference Include="..\..\src\SileroSharp.NAudio\SileroSharp.NAudio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Bundles TorchSharp + matching libtorch CPU runtime -->
+    <PackageReference Include="TorchSharp-cpu" Version="0.106.0" />
+  </ItemGroup>
+
+</Project>
