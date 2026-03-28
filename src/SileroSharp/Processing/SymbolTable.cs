@@ -104,14 +104,26 @@ internal sealed class SymbolTable
     }
 
     /// <summary>
-    /// Create a default symbol table for Russian text.
-    /// This is a fallback used when no extracted symbol table is available.
-    /// The actual table will be extracted from the model in Phase 0.
+    /// Create the default symbol table for the v5_4_ru model.
     /// </summary>
-    public static SymbolTable CreateDefault()
+    public static SymbolTable CreateDefault() => CreateForVariant(SileroModelVariant.V5Russian);
+
+    /// <summary>
+    /// Create the symbol table for a specific model variant.
+    /// </summary>
+    public static SymbolTable CreateForVariant(SileroModelVariant variant)
     {
-        // Extracted from model.symbols: '_~|!+,-.:;?абвгдежзийклмнопрстуфхцчшщъыьэюяё–… '
-        const string symbols = "_~|!+,-.:;?\u0430\u0431\u0432\u0433\u0434\u0435\u0436\u0437\u0438\u0439\u043a\u043b\u043c\u043d\u043e\u043f\u0440\u0441\u0442\u0443\u0444\u0445\u0446\u0447\u0448\u0449\u044a\u044b\u044c\u044d\u044e\u044f\u0451\u2013\u2026 ";
+        // v5_4_ru: '_~|!+,-.:;?абвгдежзийклмнопрстуфхцчшщъыьэюяё–… '
+        // v5_cis_base: '|!\'+,-.:;?hабвгдежзийклмнопрстуфхцчшщъыьэюяёєіїјўґғҕҗҙқҝҡңҥҫүұҳҷҹһӑӗәӝӟӣӥӧөӯӱӳӵӏ—… '
+        var symbols = variant switch
+        {
+            SileroModelVariant.V5Russian =>
+                "_~|!+,-.:;?\u0430\u0431\u0432\u0433\u0434\u0435\u0436\u0437\u0438\u0439\u043a\u043b\u043c\u043d\u043e\u043f\u0440\u0441\u0442\u0443\u0444\u0445\u0446\u0447\u0448\u0449\u044a\u044b\u044c\u044d\u044e\u044f\u0451\u2013\u2026 ",
+            SileroModelVariant.V5CisBase =>
+                "|!'+,-.:;?h\u0430\u0431\u0432\u0433\u0434\u0435\u0436\u0437\u0438\u0439\u043a\u043b\u043c\u043d\u043e\u043f\u0440\u0441\u0442\u0443\u0444\u0445\u0446\u0447\u0448\u0449\u044a\u044b\u044c\u044d\u044e\u044f\u0451\u0454\u0456\u0457\u0458\u045e\u0491\u0493\u0495\u0496\u0499\u049b\u049d\u04a1\u04a3\u04a5\u04ab\u04af\u04b1\u04b3\u04b7\u04b9\u04bb\u04d1\u04d7\u04d9\u04dd\u04df\u04e3\u04e5\u04e7\u04e9\u04ef\u04f1\u04f3\u04f5\u04cf\u2014\u2026 ",
+            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
+        };
+
         var charToId = new Dictionary<char, int>(symbols.Length);
         for (var i = 0; i < symbols.Length; i++)
         {

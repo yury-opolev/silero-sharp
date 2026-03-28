@@ -2,7 +2,6 @@ namespace SileroSharp;
 
 /// <summary>
 /// Represents a Silero TTS speaker voice.
-/// Speaker IDs will be confirmed after model investigation (Phase 0).
 /// </summary>
 public sealed class SileroVoice
 {
@@ -11,38 +10,52 @@ public sealed class SileroVoice
 
     private SileroVoice(string name, int speakerId)
     {
-        Name = name;
-        SpeakerId = speakerId;
+        this.Name = name;
+        this.SpeakerId = speakerId;
     }
 
-    /// <summary>Male voice — Aidar.</summary>
+    /// <summary>Create a voice with explicit speaker ID.</summary>
+    public static SileroVoice Create(string name, int speakerId) => new(name, speakerId);
+
+    // --- v5_4_ru speakers (CC BY-NC 4.0) ---
+
+    /// <summary>Male voice — Aidar (v5_4_ru).</summary>
     public static readonly SileroVoice Aidar = new("aidar", 0);
 
-    /// <summary>Female voice — Baya.</summary>
+    /// <summary>Female voice — Baya (v5_4_ru).</summary>
     public static readonly SileroVoice Baya = new("baya", 1);
 
-    /// <summary>Female voice — Kseniya.</summary>
+    /// <summary>Female voice — Kseniya (v5_4_ru).</summary>
     public static readonly SileroVoice Kseniya = new("kseniya", 2);
 
-    /// <summary>Female voice — Xenia.</summary>
+    /// <summary>Female voice — Xenia (v5_4_ru).</summary>
     public static readonly SileroVoice Xenia = new("xenia", 3);
 
-    /// <summary>All available speakers for the v5_4_ru model.</summary>
-    public static IReadOnlyList<SileroVoice> All { get; } = [Aidar, Baya, Kseniya, Xenia];
+    // --- v5_cis_base speakers (MIT, Russian subset) ---
 
-    /// <summary>
-    /// Get a voice by name (case-insensitive).
-    /// </summary>
-    public static SileroVoice FromName(string name)
-    {
-        foreach (var voice in All)
-        {
-            if (string.Equals(voice.Name, name, StringComparison.OrdinalIgnoreCase))
-                return voice;
-        }
+    /// <summary>Female voice — Aigul (CIS base, MIT).</summary>
+    public static readonly SileroVoice RuAigul = new("ru_aigul", 1);
 
-        throw new ArgumentException($"Unknown speaker: '{name}'. Available: {string.Join(", ", All.Select(v => v.Name))}");
-    }
+    /// <summary>Female voice — Albina (CIS base, MIT).</summary>
+    public static readonly SileroVoice RuAlbina = new("ru_albina", 3);
 
-    public override string ToString() => Name;
+    /// <summary>Male voice — Alexandr (CIS base, MIT).</summary>
+    public static readonly SileroVoice RuAlexandr = new("ru_alexandr", 5);
+
+    /// <summary>Male voice — Bogdan (CIS base, MIT).</summary>
+    public static readonly SileroVoice RuBogdan = new("ru_bogdan", 12);
+
+    /// <summary>Male voice — Dmitriy (CIS base, MIT).</summary>
+    public static readonly SileroVoice RuDmitriy = new("ru_dmitriy", 15);
+
+    /// <summary>Female voice — Ekaterina (CIS base, MIT).</summary>
+    public static readonly SileroVoice RuEkaterina = new("ru_ekaterina", 17);
+
+    /// <summary>Male voice — Eduard (CIS base, MIT).</summary>
+    public static readonly SileroVoice RuEduard = new("ru_eduard", 58);
+
+    /// <summary>Female voice — Zhadyra (CIS base, MIT).</summary>
+    public static readonly SileroVoice RuZhadyra = new("ru_zhadyra", 53);
+
+    public override string ToString() => this.Name;
 }

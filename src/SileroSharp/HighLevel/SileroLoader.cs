@@ -32,7 +32,7 @@ public static class SileroLoader
         var symbolsPath = Path.Combine(dir, "symbols.json");
         var symbolTable = File.Exists(symbolsPath)
             ? SymbolTable.LoadFromJson(symbolsPath)
-            : SymbolTable.CreateDefault();
+            : SymbolTable.CreateForVariant(options.Variant);
 
         // Accentor directory (contains neural stress model + exceptions + homosolver)
         var accentorDir = Path.Combine(dir, "accentor");
