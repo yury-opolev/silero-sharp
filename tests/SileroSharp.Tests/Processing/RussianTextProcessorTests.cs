@@ -6,13 +6,14 @@ namespace SileroSharp.Tests.Processing;
 public class RussianTextProcessorTests
 {
     [Fact]
-    public void Process_MultiSentenceCasedInput_SplitsAtSentenceBoundaries()
+    public void Process_MultiSentenceCasedInput_SplitsAndLowercasesEachSentence()
     {
         // Multi-sentence Russian input over the 130-char default chunk length.
         // Each underlying sentence is short enough to remain a single fragment.
-        // Bug today: ToLowerInvariant() runs before SentenceSplitter, so the splitter's
-        // "next char is uppercase" heuristic never triggers and the whole paragraph collapses
-        // into a single chunk that then gets comma-split instead of sentence-split.
+        // Verifies Option A: sentence boundaries are detected on the cased text,
+        // then each sentence is lowercased independently.
+        // Bug today: ToLowerInvariant() ran before SentenceSplitter, defeating its
+        // "next char is uppercase" boundary heuristic.
         var processor = RussianTextProcessor.CreateDefault();
         var input = "Это первое предложение для теста интонации. " +
                     "Это второе предложение, которое не слишком длинное! " +
@@ -22,30 +23,36 @@ public class RussianTextProcessorTests
 
         var result = processor.Process(input);
 
-        Assert.Equal(3, result.Sentences.Count);
-        Assert.EndsWith(".", result.Sentences[0].Text);
-        Assert.EndsWith("!", result.Sentences[1].Text);
-        Assert.EndsWith("?", result.Sentences[2].Text);
+        var actualTexts = result.Sentences.Select(s => s.Text).ToList();
+        Assert.Equal(
+            [
+                "это первое предложение для теста интонации.",
+                "это второе предложение, которое не слишком длинное!",
+                "это третье предложение, и оно тоже довольно короткое?",
+            ],
+            actualTexts);
     }
 
     [Fact]
-    public void Process_ShortSingleSentence_StaysSingle()
+    public void Process_ShortSingleSentence_PassesThroughLowercased()
     {
         // Regression guard for the short-circuit at length <= MaxChunkLength.
+        // Text is not split but is still lowercased.
         var processor = RussianTextProcessor.CreateDefault();
 
-        var result = processor.Process("Короткое предложение.");
+        var result = processor.Process("Короткое Предложение.");
 
-        Assert.Single(result.Sentences);
+        var actualTexts = result.Sentences.Select(s => s.Text).ToList();
+        Assert.Equal(["короткое предложение."], actualTexts);
     }
 
     [Fact]
-    public void Process_SingleSentenceOver130Chars_SplitsAtCommasNotPeriods()
+    public void Process_SingleSentenceOver130Chars_SplitsAtCommasWithOriginalTerminator()
     {
         // One real sentence longer than the 130-char limit.
         // After Option A (split before lowercasing) + Option D (preserve original
-        // mid-sentence punctuation), non-final fragments should end with ','
-        // and the last fragment should keep the original terminator '?'.
+        // mid-sentence punctuation), the sentence splits at commas, intermediate
+        // fragments end with ',' and the last fragment keeps '?'. All lowercased.
         var processor = RussianTextProcessor.CreateDefault();
         var input = "Это очень длинное вопросительное предложение, которое содержит много " +
                     "слов и запятых, и оно должно быть разделено на несколько частей, потому " +
@@ -55,29 +62,49 @@ public class RussianTextProcessorTests
 
         var result = processor.Process(input);
 
-        Assert.True(result.Sentences.Count > 1, "Long sentence must be split into multiple fragments.");
-        for (var i = 0; i < result.Sentences.Count - 1; i++)
-        {
-            Assert.EndsWith(",", result.Sentences[i].Text);
-        }
-        Assert.EndsWith("?", result.Sentences[^1].Text);
+        var actualTexts = result.Sentences.Select(s => s.Text).ToList();
+        Assert.Equal(
+            [
+                "это очень длинное вопросительное предложение, которое содержит много слов и запятых,",
+                "и оно должно быть разделено на несколько частей, потому что превышает максимальную длину чанка?",
+            ],
+            actualTexts);
     }
 
     [Fact]
-    public void Process_LowercasesSentencesAfterSplitting()
+    public void Process_MultiSentenceWithOneLongSentence_OnlyLongOneIsSubdivided()
     {
-        // Verify Option A: sentence boundaries are detected on cased input,
-        // then each sentence is lowercased independently.
+        // Three real sentences where the middle one exceeds MaxChunkLength.
+        // Sentence-boundary detection runs first, then length-based splitting
+        // applies only to the long sentence. Short sentences pass through whole.
         var processor = RussianTextProcessor.CreateDefault();
-        var input = "Это первое предложение для теста интонации. " +
-                    "Это второе предложение, которое не слишком длинное! " +
-                    "Это третье предложение, и оно тоже довольно короткое?";
+        var input = "Короткое первое. " +
+                    "Это очень длинное второе предложение, которое содержит много слов, " +
+                    "и оно должно быть разделено на части, потому что оно превышает " +
+                    "максимальную длину чанка! " +
+                    "Короткое третье.";
+
+        Assert.True(input.Length > 130);
 
         var result = processor.Process(input);
 
-        foreach (var sentence in result.Sentences)
-        {
-            Assert.Equal(sentence.Text, sentence.Text.ToLowerInvariant());
-        }
+        var actualTexts = result.Sentences.Select(s => s.Text).ToList();
+        Assert.Equal(
+            [
+                "короткое первое.",
+                "это очень длинное второе предложение, которое содержит много слов, и оно должно быть разделено на части,",
+                "потому что оно превышает максимальную длину чанка!",
+                "короткое третье.",
+            ],
+            actualTexts);
+    }
+
+    [Fact]
+    public void Process_EmptyOrWhitespace_ReturnsEmpty()
+    {
+        var processor = RussianTextProcessor.CreateDefault();
+
+        Assert.Empty(processor.Process("").Sentences);
+        Assert.Empty(processor.Process("   ").Sentences);
     }
 }
