@@ -42,20 +42,13 @@ internal sealed class RussianTextProcessor
                 Sentences: [new TokenizedSentence(text, _symbolTable.Encode(text))]);
         }
 
-        // 1. Homograph resolution (BERT-based, before lowercasing)
+        // 1. Homograph resolution (BERT-based, requires original casing).
         var processed = _options.PutAccent ? _homoSolver.Resolve(text) : text;
 
-        // 2. Lowercase (matching Silero's internal normalization)
-        processed = processed.ToLowerInvariant();
-
-        // 3. Yo restoration
-        processed = _options.PutYo ? _yoRestorer.Restore(processed) : processed;
-
-        // 4. Stress placement (accentor skips words already stressed by homosolver)
-        processed = _options.PutAccent ? _accentor.PlaceStress(processed) : processed;
-
-        // 4. Sentence splitting — only split if text exceeds max chunk length.
-        //    Short texts go as a single sequence, matching Silero's Python behavior.
+        // 2. Sentence splitting — done on the cased text so the splitter's "next char is
+        //    uppercase" heuristic for sentence boundaries works correctly. Lowercasing,
+        //    yo-restoration, and stress-placement are applied per-sentence below.
+        //    Short texts skip splitting entirely, matching Silero's Python behavior.
         List<string> sentences;
         if (processed.Length <= _options.MaxChunkLength)
         {
@@ -66,11 +59,15 @@ internal sealed class RussianTextProcessor
             sentences = SentenceSplitter.Split(processed, _options.MaxChunkLength);
         }
 
-        // 5. Tokenize each sentence (with SOS/EOS framing)
+        // 3. Per-sentence: lowercase → yo-restore → stress-place → tokenize.
         var tokenized = new List<TokenizedSentence>(sentences.Count);
         foreach (var sentence in sentences)
         {
-            var trimmed = sentence.Trim();
+            var lowered = sentence.ToLowerInvariant();
+            var withYo = _options.PutYo ? _yoRestorer.Restore(lowered) : lowered;
+            var stressed = _options.PutAccent ? _accentor.PlaceStress(withYo) : withYo;
+
+            var trimmed = stressed.Trim();
             if (trimmed.Length == 0)
             {
                 continue;
