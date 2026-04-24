@@ -87,4 +87,72 @@ public class SentenceSplitterTests
         Assert.Equal(2, result.Count);
         Assert.DoesNotContain("  ", result[0]);
     }
+
+    [Fact]
+    public void SplitLongSentence_CommaSplit_NonFinalFragmentsKeepComma()
+    {
+        // One real sentence, longer than maxLength, with comma boundaries.
+        // Expectation: non-final fragments end with ',' (natural mid-sentence pause).
+        // Bug today: EnsureTerminalPunctuation replaces the trailing comma with '.',
+        // which causes Silero to apply falling sentence-final intonation at every comma.
+        var longText = "Это очень длинное предложение, которое содержит много слов, " +
+                       "и оно должно быть разделено на части, потому что оно превышает " +
+                       "максимальную длину в восемьдесят символов.";
+
+        var result = SentenceSplitter.Split(longText, maxLength: 80);
+
+        Assert.True(result.Count > 1, "Long sentence should be split into multiple chunks");
+        for (var i = 0; i < result.Count - 1; i++)
+        {
+            Assert.EndsWith(",", result[i]);
+        }
+    }
+
+    [Fact]
+    public void SplitLongSentence_PreservesOriginalTerminator()
+    {
+        // The original sentence ends with '?'. The last fragment must keep '?',
+        // not have it replaced with '.'.
+        var longQuestion = "Это очень длинное вопросительное предложение, которое содержит " +
+                           "много слов, и оно должно быть разделено на части, потому что " +
+                           "оно превышает максимальную длину?";
+
+        var result = SentenceSplitter.Split(longQuestion, maxLength: 80);
+
+        Assert.True(result.Count > 1, "Long sentence should be split into multiple chunks");
+        Assert.EndsWith("?", result[^1]);
+    }
+
+    [Fact]
+    public void SplitLongSentence_ForceSplit_NonFinalFragmentsEndInComma()
+    {
+        // Sentence with no commas/semicolons/dashes inside the maxLength window.
+        // Force-split fragments should still suggest "continuing" prosody —
+        // append ',' rather than fake-terminal '.'.
+        var longText = "Это очень длинное предложение без запятых и других разделителей которое " +
+                       "должно быть принудительно разделено на несколько фрагментов потому что оно " +
+                       "превышает максимальную длину.";
+
+        var result = SentenceSplitter.Split(longText, maxLength: 60);
+
+        Assert.True(result.Count > 1, "Long sentence should be split into multiple chunks");
+        for (var i = 0; i < result.Count - 1; i++)
+        {
+            Assert.EndsWith(",", result[i]);
+        }
+        Assert.EndsWith(".", result[^1]);
+    }
+
+    [Fact]
+    public void SplitLongSentence_ExclamationPreserved()
+    {
+        var longExclamation = "Это очень длинное восклицательное предложение, которое содержит " +
+                              "много слов, и оно должно быть разделено на части, потому что " +
+                              "оно превышает максимальную длину!";
+
+        var result = SentenceSplitter.Split(longExclamation, maxLength: 80);
+
+        Assert.True(result.Count > 1, "Long sentence should be split into multiple chunks");
+        Assert.EndsWith("!", result[^1]);
+    }
 }

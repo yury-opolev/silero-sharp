@@ -51,8 +51,11 @@ internal static class SentenceSplitter
             }
             else
             {
-                // Secondary split at commas, semicolons, or dashes
-                var subChunks = SplitLongSentence(trimmed, maxLength);
+                // Secondary split at commas, semicolons, or dashes.
+                // Pass through the original sentence's terminator so only the LAST fragment
+                // gets sentence-final intonation; non-final fragments keep ',' for continuing prosody.
+                var terminator = ExtractTerminator(trimmed);
+                var subChunks = SplitLongSentence(trimmed, maxLength, terminator);
                 result.AddRange(subChunks);
             }
         }
@@ -153,7 +156,7 @@ internal static class SentenceSplitter
         return false;
     }
 
-    private static List<string> SplitLongSentence(string sentence, int maxLength)
+    private static List<string> SplitLongSentence(string sentence, int maxLength, char terminator)
     {
         var chunks = new List<string>();
         var remaining = sentence.AsSpan();
@@ -161,7 +164,8 @@ internal static class SentenceSplitter
         while (remaining.Length > maxLength)
         {
             var splitIndex = FindSecondarySplitPoint(remaining, maxLength);
-            if (splitIndex <= 0)
+            var isForceSplit = splitIndex <= 0;
+            if (isForceSplit)
             {
                 // Force split at maxLength
                 splitIndex = maxLength;
@@ -174,7 +178,12 @@ internal static class SentenceSplitter
 
             var chunk = remaining[..splitIndex].ToString().Trim();
             if (chunk.Length > 0)
-                chunks.Add(EnsureTerminalPunctuation(chunk));
+            {
+                // Non-final fragment: end with ',' to suggest a continuing-thought pause.
+                // For comma/semicolon/dash splits the chunk already ends with that punctuation;
+                // normalize anything else (including force-splits with no trailing punctuation) to ','.
+                chunks.Add(EnsureContinuingPunctuation(chunk));
+            }
 
             remaining = remaining[splitIndex..].TrimStart();
         }
@@ -183,7 +192,10 @@ internal static class SentenceSplitter
         {
             var last = remaining.ToString().Trim();
             if (last.Length > 0)
-                chunks.Add(EnsureTerminalPunctuation(last));
+            {
+                // Final fragment: apply the original sentence's terminator.
+                chunks.Add(ApplyTerminator(last, terminator));
+            }
         }
 
         return chunks;
@@ -240,6 +252,74 @@ internal static class SentenceSplitter
             return text[..^1] + ".";
 
         return text + ".";
+    }
+
+    /// <summary>
+    /// Returns the terminator of an entire sentence ('.', '!' or '?'). Used to remember
+    /// the original ending so a long sentence's last fragment can carry it after splitting.
+    /// </summary>
+    private static char ExtractTerminator(string sentence)
+    {
+        if (sentence.Length == 0)
+            return '.';
+
+        var lastChar = sentence[^1];
+        return lastChar switch
+        {
+            '.' or '!' or '?' or '…' => lastChar,
+            _ => '.',
+        };
+    }
+
+    /// <summary>
+    /// For non-final fragments of a long sentence: ensure ending punctuation suggests a
+    /// continuing-thought pause (',') rather than sentence-final intonation.
+    /// Preserves natural mid-sentence punctuation (',', ';', '—', '–'); replaces any
+    /// terminator and appends ',' if none exists.
+    /// </summary>
+    private static string EnsureContinuingPunctuation(string text)
+    {
+        if (text.Length == 0)
+            return text;
+
+        var lastChar = text[^1];
+
+        // Already mid-sentence punctuation — keep as-is for natural pause.
+        if (lastChar is ',' or ';' or '—' or '–')
+            return text;
+
+        // Strip a colon (rarely appears in TTS output but keep behavior consistent).
+        if (lastChar is ':')
+            return text[..^1] + ",";
+
+        // Strip any sentence-final punctuation that snuck in (e.g. abbreviation period
+        // misclassified earlier) — we want continuing prosody here.
+        if (lastChar is '.' or '!' or '?' or '…')
+            return text[..^1] + ",";
+
+        return text + ",";
+    }
+
+    /// <summary>
+    /// Apply the original sentence's terminator to the final fragment.
+    /// Replaces any continuing punctuation (',', ';', etc.) with the terminator.
+    /// </summary>
+    private static string ApplyTerminator(string text, char terminator)
+    {
+        if (text.Length == 0)
+            return text;
+
+        var lastChar = text[^1];
+
+        // Already terminated correctly.
+        if (lastChar == terminator || lastChar is '…')
+            return text;
+
+        // Replace any other punctuation with the terminator.
+        if (lastChar is '.' or '!' or '?' or ',' or ';' or ':' or '—' or '–')
+            return text[..^1] + terminator;
+
+        return text + terminator;
     }
 
     private static string NormalizeWhitespace(string text)
